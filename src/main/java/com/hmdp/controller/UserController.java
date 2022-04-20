@@ -47,7 +47,10 @@ public class UserController {
     @PostMapping("/login")
     public Result login(@RequestBody LoginFormDTO loginForm, HttpSession session){
         // TODO 实现登录功能
-        return Result.fail("功能未完成");
+        //说一下嗷，这个@RequestBody 是表示 用我这个对象格式接收前端表单提交的json
+        //而这个session，前端发送请求，请求我这个login接口，这个在http协议为我创建了一个session
+        //这个session里只存 请求的这个用户的信息。并且由sessionid来定位
+        return userService.login(loginForm,session);
     }
 
     /**

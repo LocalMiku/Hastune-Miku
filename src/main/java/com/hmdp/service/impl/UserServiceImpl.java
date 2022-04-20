@@ -48,9 +48,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //4我们需要把验证码发送给客户，调用发送模块
 
         log.debug("（づ￣3￣）づ╭❤～miku（づ￣3￣）づ╭❤～爱你:"+Code);
-
-
-
         //返回，前端申请的校验完成
         return Result.ok();
 
@@ -74,6 +71,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         //2 手机号格式正确，校验验证码，session是专属这个用户请求对话的session
         String Code= (String) session.getAttribute("Code");
+        session.removeAttribute("Code");
         if(Code==null||!Code.equals(loginForm.getCode()))
         {
             return Result.fail("（づ￣3￣）づ╭❤～验证码错啦");

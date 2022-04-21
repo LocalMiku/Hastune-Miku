@@ -17,7 +17,7 @@ public class MyInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         //1维持客户端状态的session里面是否存了用户，这个session单独对一个用户的浏览器生效
         HttpSession session=request.getSession();
-        Object user=session.getAttribute("user");
+        User user=(User)session.getAttribute("user");
         //2 这个session里维持了客户端状态，里面是否有user呢？就是登陆过没
         if(user==null)
         {
@@ -25,7 +25,11 @@ public class MyInterceptor implements HandlerInterceptor {
             return false;
         }
         //3如果存在，就把这个用户保存在 服务器应用的 专属于它的线程里
-        UserHolder.saveUser((UserDTO) user);
+        UserDTO userDTO=new UserDTO();
+        userDTO.setIcon(user.getIcon());
+        userDTO.setId(user.getId());
+        userDTO.setNickName(user.getNickName());
+        UserHolder.saveUser(userDTO);
         return true;//放行了
 
 

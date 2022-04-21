@@ -1,16 +1,25 @@
 package com.hmdp.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.dto.LoginFormDTO;
 import com.hmdp.dto.Result;
+import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * <p>
@@ -27,8 +36,17 @@ import javax.servlet.http.HttpSession;
     //还有具体细节，比如传参，这个mp和mybaits都要复习
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
+    //按 byName自动注入罢了。@Resource有两个属性是比较重要的，
+    // 分是name和type，Spring将@Resource注解的name属性解析为bean的名字，
+    // 而type属性则解析为bean的类型。
+    // 所以如果使用name属性，则使用byName的自动注入策略，
+    // 而使用type属性时则使用byType自动注入策略。
+    // 如果既不指定name也不指定type属性，这时将通过反射机制使用byName自动注入策略。
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     @Override
     public Result sendCode(String phone, HttpSession session) {
+        //redis优化说明，业务流程 发送验证码，服务端存到redis里
 
         //1后端校验手机格式，使用正则工具包,如果不对，直接把Result返回过去，这个是我们前后
         //交互的协议，里面放了很多东西
@@ -43,8 +61,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //session的出现，应用层http协议打的补丁，为了维持客户端状态而出现的
         //大概是一个连接一个session，cookie里的sessionid 来选择session
         //然后一个用户一个session，他的东西全在里面存着
-        session.setAttribute("Code",Code);
-        session.setMaxInactiveInterval(30 * 60);
+        //session.setAttribute("Code",Code);
+        //将数据存入redis--与之相关的登陆业务，还有登录状态校验业务
+        stringRedisTemplate.opsForValue().set("logincode:"+phone,Code);
         //4我们需要把验证码发送给客户，调用发送模块
 
         log.debug("（づ￣3￣）づ╭❤～miku（づ￣3￣）づ╭❤～爱你:"+Code);
@@ -70,8 +89,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return Result.fail("o(╥﹏╥)o格式不对（づ￣3￣）づ╭❤～");
         }
         //2 手机号格式正确，校验验证码，session是专属这个用户请求对话的session
-        String Code= (String) session.getAttribute("Code");
-        session.removeAttribute("Code");
+       // String Code= (String) session.getAttribute("Code");
+        //session.removeAttribute("Code");
+        String Code=stringRedisTemplate.opsForValue().get("logincode:"+loginForm.getPhone());
         if(Code==null||!Code.equals(loginForm.getCode()))
         {
             return Result.fail("（づ￣3￣）づ╭❤～验证码错啦");
@@ -88,9 +108,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
 
         //将user存入session，用以维持客户端状态
-        session.setAttribute("user",user);
+        //生成uui作为登录令牌
+        //将user转为map，以便放入redis
+        String token = UUID.randomUUID().toString(true);
 
-        return Result.ok();
+        UserDTO userDTO= BeanUtil.copyProperties(user,UserDTO.class);
+        Map<String,Object> userMap=BeanUtil.beanToMap(userDTO,new HashMap<>()
+        , CopyOptions.create()
+                        .setIgnoreNullValue(true)
+                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+        //储存 哈希值 登录令牌-用户 哈希键值对
+        String tokenKey="loginkey"+token;
+        stringRedisTemplate.opsForHash().putAll(tokenKey,userMap);
+        stringRedisTemplate.expire(tokenKey,2, TimeUnit.MINUTES);
+        return Result.ok(token);
+
+
+
     }
     private User Create(String phone){
         User user=new User();
